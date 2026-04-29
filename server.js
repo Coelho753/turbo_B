@@ -46,6 +46,28 @@ async function getParticipantes() {
   return all;
 }
 
+// 📸 FUNÇÃO PARA PEGAR INSTAGRAM (NOVO - SEM QUEBRAR NADA)
+function getInstagram(participant) {
+  const form = participant.custom_form;
+
+  if (!form) return null;
+
+  // caso venha como array
+  if (Array.isArray(form)) {
+    const campo = form.find(f =>
+      f.name && f.name.toLowerCase().includes('instagram')
+    );
+    return campo ? campo.value : null;
+  }
+
+  // caso venha como objeto único
+  if (form.name && form.name.toLowerCase().includes('instagram')) {
+    return form.value;
+  }
+
+  return null;
+}
+
 // 🎯 3. SORTEIO (com regras)
 function sortear(participantes) {
   // apenas pedidos aprovados
@@ -81,6 +103,7 @@ app.get('/sortear', async (req, res) => {
       vencedor: {
         id: vencedor.id,
         nome: `${vencedor.first_name} ${vencedor.last_name}`,
+        instagram: getInstagram(vencedor), // 👈 NOVO
         email: vencedor.email,
         ticket: vencedor.ticket_number
       },
