@@ -1,15 +1,20 @@
 require('dotenv').config();
+
 const express = require('express');
+const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
+
+// 🌍 CORS — libera o frontend (static site) a chamar essa API
+app.use(cors({ origin: '*' }));
 
 const TOKEN = process.env.SYMPA_TOKEN;
 const EVENT_ID = process.env.EVENT_ID;
 const BASE_URL = 'https://api.sympla.com.br/public/v3';
 
 const headers = {
-  S_TOKEN: TOKEN
+  S_TOKEN: TOKEN,
 };
 
 // 🔎 1. VALIDAR EVENTO
@@ -21,7 +26,7 @@ async function validarEvento() {
     id: evento.id,
     nome: evento.name,
     inicio: evento.start_date,
-    fim: evento.end_date
+    fim: evento.end_date,
   };
 }
 
@@ -46,21 +51,18 @@ async function getParticipantes() {
   return all;
 }
 
-// 📸 FUNÇÃO PARA PEGAR INSTAGRAM (NOVO - SEM QUEBRAR NADA)
+// 📸 INSTAGRAM
 function getInstagram(participant) {
   const form = participant.custom_form;
-
   if (!form) return null;
 
-  // caso venha como array
   if (Array.isArray(form)) {
-    const campo = form.find(f =>
-      f.name && f.name.toLowerCase().includes('instagram')
+    const campo = form.find(
+      (f) => f.name && f.name.toLowerCase().includes('instagram')
     );
     return campo ? campo.value : null;
   }
 
-  // caso venha como objeto único
   if (form.name && form.name.toLowerCase().includes('instagram')) {
     return form.value;
   }
@@ -68,16 +70,14 @@ function getInstagram(participant) {
   return null;
 }
 
-// 🎯 3. SORTEIO (com regras)
+// 🎯 3. SORTEIO
 function sortear(participantes) {
-  // apenas pedidos aprovados
-  const validos = participantes.filter(p => p.order_status === 'A');
+  const validos = participantes.filter((p) => p.order_status === 'A');
 
   if (validos.length === 0) {
     throw new Error('Nenhum participante válido');
   }
 
-  // evita duplicidade por email (1 chance por pessoa)
   const unicos = Object.values(
     validos.reduce((acc, p) => {
       acc[p.email] = p;
@@ -89,11 +89,10 @@ function sortear(participantes) {
   return unicos[index];
 }
 
-// 🌐 ENDPOINT DE PRODUÇÃO
-app.get('/sortear', async (req, res) => {
+// 🌐 ENDPOINT — aceita /sortear e /api/sortear
+async function handleSortear(req, res) {
   try {
     const evento = await validarEvento();
-
     const participantes = await getParticipantes();
     const vencedor = sortear(participantes);
 
@@ -103,21 +102,27 @@ app.get('/sortear', async (req, res) => {
       vencedor: {
         id: vencedor.id,
         nome: `${vencedor.first_name} ${vencedor.last_name}`,
-        instagram: getInstagram(vencedor), // 👈 NOVO
+        instagram: getInstagram(vencedor),
         email: vencedor.email,
-        ticket: vencedor.ticket_number
+        ticket: vencedor.ticket_number,
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     return res.status(500).json({
       erro: true,
-      detalhe: error.response?.data || error.message
+      detalhe: error.response?.data || error.message,
     });
   }
-});
+}
 
-app.listen(process.env.PORT, () => {
-  console.log(`API rodando na porta ${process.env.PORT}`);
+app.get('/sortear', handleSortear);
+app.get('/api/sortear', handleSortear);
+
+// healthcheck (útil pro Render)
+app.get('/', (req, res) => res.json({ ok: true, service: 'turbo-b' }));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`API rodando na porta ${PORT}`);
 });
